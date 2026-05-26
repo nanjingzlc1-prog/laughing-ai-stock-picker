@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>laughing的AI选股</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #0f1923; color: #e0e6ed; min-height: 100vh; }
+
+.header { background: linear-gradient(135deg, #1a2a3a 0%, #0d1b2a 100%); border-bottom: 1px solid #1e3a5f; padding: 20px 40px; display: flex; align-items: center; justify-content: space-between; }
+.header h1 { font-size: 24px; font-weight: 700; background: linear-gradient(135deg, #4fc3f7, #29b6f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header .date { color: #5a7a9a; font-size: 14px; }
+.header .model-badge { background: #1e3a5f; border: 1px solid #2a5a8a; padding: 6px 16px; border-radius: 20px; font-size: 13px; color: #4fc3f7; }
+
+.container { max-width: 1400px; margin: 0 auto; padding: 24px 40px; }
+
+/* 概览卡片 */
+.cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.card { background: #152230; border: 1px solid #1e3a5f; border-radius: 12px; padding: 20px 24px; }
+.card .label { font-size: 13px; color: #5a7a9a; margin-bottom: 8px; }
+.card .value { font-size: 28px; font-weight: 700; }
+.card .value.up { color: #ef5350; }
+.card .value.down { color: #26a69a; }
+.card .sub { font-size: 12px; color: #5a7a9a; margin-top: 4px; }
+
+/* 图表区 */
+.charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.chart-box { background: #152230; border: 1px solid #1e3a5f; border-radius: 12px; padding: 20px; }
+.chart-box h3 { font-size: 15px; color: #8ab4d6; margin-bottom: 12px; font-weight: 600; }
+.chart-inner { width: 100%; height: 300px; }
+
+/* 推荐列表 */
+.section-title { font-size: 18px; font-weight: 700; color: #c8dae8; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+.section-title::before { content: ''; width: 4px; height: 20px; background: #4fc3f7; border-radius: 2px; }
+
+.table-wrap { background: #152230; border: 1px solid #1e3a5f; border-radius: 12px; overflow: hidden; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 14px 20px; font-size: 13px; color: #5a7a9a; font-weight: 500; background: #0f1923; border-bottom: 1px solid #1e3a5f; }
+td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid #1a2f45; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(79, 195, 247, 0.04); }
+
+.stock-name { font-weight: 600; color: #e0e6ed; }
+.stock-code { font-size: 12px; color: #5a7a9a; margin-left: 8px; }
+
+.score { display: inline-flex; align-items: center; gap: 6px; }
+.score-bar { width: 60px; height: 6px; background: #1e3a5f; border-radius: 3px; overflow: hidden; }
+.score-bar-fill { height: 100%; border-radius: 3px; }
+.score-bar-fill.buy { background: linear-gradient(90deg, #ef5350, #ff7043); }
+.score-bar-fill.hold { background: linear-gradient(90deg, #ffa726, #ffca28); }
+
+.tag { display: inline-block; padding: 2px 10px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+.tag.buy { background: rgba(239, 83, 80, 0.15); color: #ef5350; }
+.tag.hold { background: rgba(255, 167, 38, 0.15); color: #ffa726; }
+.tag.watch { background: rgba(79, 195, 247, 0.15); color: #4fc3f7; }
+
+.reason { color: #8ab4d6; font-size: 13px; max-width: 300px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.risk { font-size: 12px; }
+.risk.low { color: #26a69a; }
+.risk.mid { color: #ffa726; }
+
+/* AI分析面板 */
+.ai-panel { background: linear-gradient(135deg, #152230 0%, #1a2a3a 100%); border: 1px solid #1e3a5f; border-radius: 12px; padding: 24px; margin-top: 24px; }
+.ai-panel h3 { font-size: 15px; color: #4fc3f7; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.ai-panel p { color: #8ab4d6; font-size: 14px; line-height: 1.8; }
+.ai-panel .highlight { color: #ef5350; font-weight: 600; }
+.ai-panel .highlight-green { color: #26a69a; font-weight: 600; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>laughing的AI选股</h1>
+    <div class="date">数据更新：2026-05-26 15:30 CST | 基于 DeepSeek 量化分析</div>
+  </div>
+  <div class="model-badge">DeepSeek 驱动</div>
+</div>
+
+<div class="container">
+
+  <!-- 概览卡片 -->
+  <div class="cards">
+    <div class="card">
+      <div class="label">今日推荐</div>
+      <div class="value up">8 只</div>
+      <div class="sub">买入评级</div>
+    </div>
+    <div class="card">
+      <div class="label">平均预期收益</div>
+      <div class="value up">+12.5%</div>
+      <div class="sub">未来20交易日</div>
+    </div>
+    <div class="card">
+      <div class="label">市场情绪</div>
+      <div class="value up">偏多</div>
+      <div class="sub">综合评分 72/100</div>
+    </div>
+    <div class="card">
+      <div class="label">策略胜率（近30日）</div>
+      <div class="value up">68.3%</div>
+      <div class="sub">上涨命中率</div>
+    </div>
+  </div>
+
+  <!-- 图表 -->
+  <div class="charts">
+    <div class="chart-box">
+      <h3>推荐标的行业分布</h3>
+      <div class="chart-inner" id="pie-chart"></div>
+    </div>
+    <div class="chart-box">
+      <h3>策略累计收益 vs 沪深300</h3>
+      <div class="chart-inner" id="line-chart"></div>
+    </div>
+  </div>
+
+  <!-- 选股列表 -->
+  <div class="section-title">今日AI精选</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>股票</th>
+          <th>AI评分</th>
+          <th>建议</th>
+          <th>核心逻辑</th>
+          <th>风险等级</th>
+          <th>预期收益</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="stock-name">宁德时代</span><span class="stock-code">300750</span></td>
+          <td>
+            <div class="score">
+              <span>92</span>
+              <div class="score-bar"><div class="score-bar-fill buy" style="width:92%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag buy">强烈推荐</span></td>
+          <td class="reason">固态电池量产突破，Q1利润超预期，技术面突破压力位</td>
+          <td class="risk low">低</td>
+          <td style="color:#ef5350">+18.5%</td>
+        </tr>
+        <tr>
+          <td><span class="stock-name">中芯国际</span><span class="stock-code">688981</span></td>
+          <td>
+            <div class="score">
+              <span>88</span>
+              <div class="score-bar"><div class="score-bar-fill buy" style="width:88%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag buy">强烈推荐</span></td>
+          <td class="reason">国产替代加速，先进制程良率提升，机构持续加仓</td>
+          <td class="risk low">低</td>
+          <td style="color:#ef5350">+22.3%</td>
+        </tr>
+        <tr>
+          <td><span class="stock-name">科大讯飞</span><span class="stock-code">002230</span></td>
+          <td>
+            <div class="score">
+              <span>85</span>
+              <div class="score-bar"><div class="score-bar-fill buy" style="width:85%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag buy">推荐</span></td>
+          <td class="reason">AI应用商业化加速，教育/医疗双轮驱动，财报亮眼</td>
+          <td class="risk mid">中</td>
+          <td style="color:#ef5350">+15.1%</td>
+        </tr>
+        <tr>
+          <td><span class="stock-name">拓普集团</span><span class="stock-code">601689</span></td>
+          <td>
+            <div class="score">
+              <span>81</span>
+              <div class="score-bar"><div class="score-bar-fill buy" style="width:81%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag buy">推荐</span></td>
+          <td class="reason">机器人产业链核心标的，特斯拉Optimus供应商，放量在即</td>
+          <td class="risk mid">中</td>
+          <td style="color:#ef5350">+25.7%</td>
+        </tr>
+        <tr>
+          <td><span class="stock-name">中科曙光</span><span class="stock-code">603019</span></td>
+          <td>
+            <div class="score">
+              <span>78</span>
+              <div class="score-bar"><div class="score-bar-fill hold" style="width:78%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag hold">关注</span></td>
+          <td class="reason">算力基建龙头，政策催化密集，短期回调到位</td>
+          <td class="risk mid">中</td>
+          <td style="color:#ef5350">+10.8%</td>
+        </tr>
+        <tr>
+          <td><span class="stock-name">迈瑞医疗</span><span class="stock-code">300760</span></td>
+          <td>
+            <div class="score">
+              <span>76</span>
+              <div class="score-bar"><div class="score-bar-fill hold" style="width:76%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag hold">关注</span></td>
+          <td class="reason">医疗器械出海龙头，海外营收占比突破40%，估值合理</td>
+          <td class="risk low">低</td>
+          <td style="color:#ef5350">+8.2%</td>
+        </tr>
+        <tr>
+          <td><span class="stock-name">韦尔股份</span><span class="stock-code">603501</span></td>
+          <td>
+            <div class="score">
+              <span>74</span>
+              <div class="score-bar"><div class="score-bar-fill hold" style="width:74%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag watch">观察</span></td>
+          <td class="reason">CIS芯片龙头，手机/汽车双景气，等待回调买点</td>
+          <td class="risk mid">中</td>
+          <td style="color:#ef5350">+6.5%</td>
+        </tr>
+        <tr>
+          <td><span class="stock-name">金山办公</span><span class="stock-code">688111</span></td>
+          <td>
+            <div class="score">
+              <span>71</span>
+              <div class="score-bar"><div class="score-bar-fill hold" style="width:71%"></div></div>
+            </div>
+          </td>
+          <td><span class="tag watch">观察</span></td>
+          <td class="reason">AI+办公龙头，WPS AI付费率持续提升，长期看好</td>
+          <td class="risk low">低</td>
+          <td style="color:#ef5350">+5.8%</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- AI 分析摘要 -->
+  <div class="ai-panel">
+    <h3>DeepSeek 市场分析摘要</h3>
+    <p>
+      今日A股市场呈现<span class="highlight">结构性机会</span>，AI算力、半导体、机器人三大主线持续活跃。<br><br>
+      <span class="highlight-green">核心观点：</span>当前市场风格偏向成长，资金向科技龙头集中。<span class="highlight">宁德时代（300750）</span>固态电池技术突破带动产业链估值重塑，为近期最确定性机会；<span class="highlight">中芯国际（688981）</span>受益于国产替代政策加速，先进制程良率超预期，具备中期配置价值。<br><br>
+      风险提示：美国大选年贸易政策不确定性上升，建议控制仓位在<span class="highlight">7成以下</span>，优先选择业绩确定性强的行业龙头。
+    </p>
+  </div>
+
+</div>
+
+<script>
+// 行业分布饼图
+(function(){
+  var c = echarts.init(document.getElementById('pie-chart'));
+  c.setOption({
+    tooltip: { trigger: 'item' },
+    series: [{
+      type: 'pie', radius: ['50%', '78%'], center: ['50%', '55%'],
+      itemStyle: { borderRadius: 6, borderColor: '#152230', borderWidth: 4 },
+      label: { color: '#8ab4d6', fontSize: 12 },
+      data: [
+        { value: 3, name: '半导体', itemStyle: { color: '#4fc3f7' } },
+        { value: 2, name: '新能源', itemStyle: { color: '#ef5350' } },
+        { value: 1, name: 'AI应用', itemStyle: { color: '#ffa726' } },
+        { value: 1, name: '医疗器械', itemStyle: { color: '#26a69a' } },
+        { value: 1, name: '机器人', itemStyle: { color: '#ab47bc' } },
+      ]
+    }]
+  });
+})();
+
+// 收益曲线
+(function(){
+  var c = echarts.init(document.getElementById('line-chart'));
+  var dates = ['4/1','4/5','4/10','4/15','4/20','4/25','5/1','5/5','5/10','5/15','5/20','5/26'];
+  var strategy = [0, 2.1, 5.3, 4.8, 8.2, 7.5, 11.3, 13.8, 12.5, 16.2, 18.7, 22.4];
+  var hs300 = [0, 1.2, 2.8, 2.1, 3.5, 2.9, 4.2, 5.1, 4.6, 5.8, 6.3, 7.2];
+  c.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['AI策略', '沪深300'], bottom: 0, textStyle: { color: '#5a7a9a', fontSize: 12 } },
+    grid: { left: 16, right: 24, top: 12, bottom: 36 },
+    xAxis: { type: 'category', data: dates, axisLine: { lineStyle: { color: '#1e3a5f' } }, axisLabel: { color: '#5a7a9a', fontSize: 11 } },
+    yAxis: { type: 'value', axisLabel: { color: '#5a7a9a', fontSize: 11, formatter: '{value}%' }, splitLine: { lineStyle: { color: '#1e3a5f', type: 'dashed' } } },
+    series: [
+      { name: 'AI策略', type: 'line', data: strategy, smooth: true, symbol: 'none', lineStyle: { color: '#4fc3f7', width: 2.5 }, areaStyle: { color: new echarts.graphic.LinearGradient(0,0,0,1,[{offset:0,color:'rgba(79,195,247,0.2)'},{offset:1,color:'rgba(79,195,247,0)'}]) } },
+      { name: '沪深300', type: 'line', data: hs300, smooth: true, symbol: 'none', lineStyle: { color: '#5a7a9a', width: 1.5, type: 'dashed' } },
+    ]
+  });
+})();
+
+window.addEventListener('resize', function(){
+  echarts.getInstanceByDom(document.getElementById('pie-chart')).resize();
+  echarts.getInstanceByDom(document.getElementById('line-chart')).resize();
+});
+</script>
+
+</body>
+</html>
